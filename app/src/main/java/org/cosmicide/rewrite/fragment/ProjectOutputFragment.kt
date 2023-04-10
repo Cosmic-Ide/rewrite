@@ -94,5 +94,5 @@ class ProjectOutputFragment : Fragment() {
         return binding.root
     }
 
-    
+
 }
