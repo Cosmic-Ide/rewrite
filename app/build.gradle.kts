@@ -57,7 +57,7 @@ dependencies {
     implementation(platform("io.github.Rosemoe.sora-editor:bom:0.21.1"))
     implementation("io.github.Rosemoe.sora-editor:editor")
     implementation("io.github.Rosemoe.sora-editor:language-textmate")
-    implementation("io.github.dingyi222666:treeview:1.1.0")
+    implementation("io.github.dingyi222666:treeview:1.2.0")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4")
     implementation("com.android.tools.smali:smali-dexlib2:3.0.2")
