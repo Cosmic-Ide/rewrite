@@ -22,7 +22,7 @@ tasks.withType<KotlinCompile> {
 }
 
 dependencies {
-    implementation("org.eclipse.lsp4j:org.eclipse.lsp4j:0.12.0")
+    implementation("org.eclipse.lsp4j:org.eclipse.lsp4j:0.21.0")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("io.github.itsaky:nb-javac-android:17.0.0.3")
     implementation("com.google.guava:guava:32.0.0-jre")
