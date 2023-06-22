@@ -130,7 +130,7 @@ dependencies {
     implementation("io.github.Rosemoe.sora-editor:language-textmate:0.21.1")
     implementation("io.github.dingyi222666:treeview:1.2.1")
     implementation("io.github.itsaky:nb-javac-android:17.0.0.3")
-    implementation("org.commonmark:commonmark:0.20.0")
+    implementation("org.commonmark:commonmark:0.21.0")
     implementation("com.aliucord:Aliuhook:main-SNAPSHOT")
     implementation("de.maxr1998:modernandroidpreferences:2.3.2")
 
