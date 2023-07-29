@@ -187,7 +187,7 @@ dependencies {
     implementation("com.aliucord:Aliuhook:main-SNAPSHOT")
     implementation("de.maxr1998:modernandroidpreferences:2.3.2")
 
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:4.3")
     implementation("org.slf4j:slf4j-simple:2.0.7")
     implementation(platform("com.google.firebase:firebase-bom:32.1.0"))
