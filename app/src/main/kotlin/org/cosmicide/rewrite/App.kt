@@ -45,11 +45,6 @@ import java.util.concurrent.Executors
 class App : Application() {
 
     companion object {
-
-        /**
-         * The application instance.
-         */
-        @JvmStatic
         lateinit var instance: WeakReference<App>
     }
 
@@ -58,54 +53,155 @@ class App : Application() {
         instance = WeakReference(this)
         HookManager.context = WeakReference(this)
 
+        setupCrashConfig()
+        val externalStorage = getExternalFilesDir(null)!!
+        initAppComponents(externalStorage)
+        setupStrictMode()
+        setupHiddenApiExemptions()
+        applyDynamicColors()
+        extractKotlinFiles()
+        disableJavacModules()
+        loadTextmateTheme()
+        logStartupAnalytics()
+        applyNightMode()
+        setupHooks()
+    }
+
+    private fun setupCrashConfig() {
         CrashConfig.Builder.create()
             .showRestartButton(true)
             .trackActivities(true)
             .apply()
+    }
 
-        val externalStorage = getExternalFilesDir(null)!!
-
+    private fun initAppComponents(externalStorage: File) {
         Prefs.init(applicationContext)
         FileUtil.init(externalStorage)
+    }
 
-        setupHooks()
-        loadPlugins()
-
-        BuildConfig.DEBUG.then {
-            StrictMode.setVmPolicy(
-                StrictMode.VmPolicy.Builder().apply {
-                    detectLeakedRegistrationObjects()
-                    detectActivityLeaks()
-                    detectContentUriWithoutPermission()
-                    detectFileUriExposure()
-                    detectCleartextNetwork()
-                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-                        penaltyLog()
-                        return@apply
-                    }
-                    permitNonSdkApiUsage()
-                    penaltyListener(Executors.newSingleThreadExecutor()) { violation ->
-                        Log.e("StrictMode", "VM violation", violation)
-                        violation.printStackTrace()
-                    }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        detectIncorrectContextUse()
-                        detectUnsafeIntentLaunch()
-                    }
-                }.build()
-            )
+    private fun setupStrictMode() {
+        if (BuildConfig.DEBUG) {
+            setupDebugStrictMode()
         }
+    }
 
-        (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-            .then(HiddenApiBypass.addHiddenApiExemptions("Lsun/misc/Unsafe;"))
+    private fun setupDebugStrictMode() {
+        StrictMode.setVmPolicy(
+            StrictMode.VmPolicy.Builder().apply {
+                detectLeakedRegistrationObjects()
+                detectActivityLeaks()
+                detectContentUriWithoutPermission()
+                detectFileUriExposure()
+                detectCleartextNetwork()
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+                    penaltyLog()
+                    return@apply
+                }
+                permitNonSdkApiUsage()
+                penaltyListener(Executors.newSingleThreadExecutor()) { violation ->
+                    Log.e("StrictMode", "VM violation", violation)
+                    violation.printStackTrace()
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    detectIncorrectContextUse()
+                    detectUnsafeIntentLaunch()
+                }
+            }.build()
+        )
+    }
 
+    private fun setupHiddenApiExemptions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            HiddenApiBypass.addHiddenApiExemptions("Lsun/misc/Unsafe;")
+        }
+    }
+
+    private fun applyDynamicColors() {
         DynamicColors.applyToActivitiesIfAvailable(this)
+    }
 
-        extractFiles()
-        disableModules()
+    private fun extractKotlinFiles() {
+        val classpathDir = FileUtil.classpathDir
+        val kotlinStdlibFile = classpathDir.resolve("kotlin-stdlib-1.8.0.jar")
+        kotlinStdlibFile.takeIf { it.exists() }?.delete()
+        extractAsset("kotlin-stdlib-1.9.0.jar", classpathDir.resolve("kotlin-stdlib-1.9.0.jar"))
+        extractAsset("kotlin-stdlib-common-1.9.0.jar", classpathDir.resolve("kotlin-stdlib-common-1.9.0.jar"))
+    }
 
-        loadTextmateTheme()
+    private fun extractAsset(assetName: String, targetFile: File) {
+        if (!targetFile.exists()) {
+            try {
+                assets.open(assetName).use { inputStream ->
+                    targetFile.outputStream().use { outputStream ->
+                        inputStream.copyTo(outputStream)
+                    }
+                }
+            } catch (e: FileNotFoundException) {
+                Log.e("App", "Failed to extract asset: $assetName", e)
+            }
+        }
+    }
 
+    private fun disableJavacModules() {
+        JavacConfigProvider.disableModules()
+    }
+
+    private fun loadTextmateTheme() {
+        val fileProvider = AssetsFileResolver(assets)
+        FileProviderRegistry.getInstance().addFileProvider(fileProvider)
+
+        GrammarRegistry.getInstance().loadGrammars("textmate/languages.json")
+
+        val themeRegistry = ThemeRegistry.getInstance()
+        themeRegistry.loadTheme(loadTheme("darcula.json", "darcula"))
+        themeRegistry.loadTheme(loadTheme("QuietLight.tmTheme.json", "QuietLight"))
+
+        applyThemeBasedOnConfiguration()
+    }
+
+    private fun loadTheme(fileName: String, themeName: String): ThemeModel {
+        val inputStream = FileProviderRegistry.getInstance().tryGetInputStream("textmate/$fileName")
+            ?: throw FileNotFoundException("Theme file not found: $fileName")
+        val source = IThemeSource.fromInputStream(inputStream, fileName, null)
+        return ThemeModel(source, themeName)
+    }
+
+    private fun setupHooks() {
+        setupSystemExitHook()
+        setupViewPager2FixHook()
+    }
+
+    private fun setupSystemExitHook() {
+        HookManager.registerHook(object : Hook(
+            method = "exit",
+            argTypes = arrayOf(Int::class.java),
+            type = System::class.java
+        ) {
+            override fun before(param: XC_MethodHook.MethodHookParam) {
+                System.err.println("System.exit() called!")
+                param.result = null
+            }
+        })
+    }
+
+    private fun setupViewPager2FixHook() {
+        HookManager.registerHook(object : Hook(
+            method = "onLayoutChildren",
+            argTypes = arrayOf(RecyclerView.Recycler::class.java, RecyclerView.State::class.java),
+            type = LinearLayoutManager::class.java
+        ) {
+            override fun before(param: XC_MethodHook.MethodHookParam) {
+                try {
+                    HookManager.invokeOriginal(param.method, param.thisObject, param.args[0], param.args[1])
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                param.result = null
+            }
+        })
+    }
+
+    private fun logStartupAnalytics() {
         Analytics.logEvent(
             "startup",
             "theme" to Prefs.appTheme,
@@ -115,10 +211,18 @@ class App : Application() {
             "manufacturer" to Build.MANUFACTURER,
             "sdk" to Build.VERSION.SDK_INT.toString(),
             "abi" to Build.SUPPORTED_ABIS.joinToString(),
-            "version" to BuildConfig.VERSION_NAME + if (BuildConfig.GIT_COMMIT.isNotEmpty()) " (${BuildConfig.GIT_COMMIT})" else "",
+            "version" to "${BuildConfig.VERSION_NAME}${if (BuildConfig.GIT_COMMIT.isNotEmpty()) " (${BuildConfig.GIT_COMMIT})" else ""}"
         )
-
         Analytics.setAnalyticsCollectionEnabled(Prefs.analyticsEnabled)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        setTheme(Prefs.appAccent.toInt())
+        applyThemeBasedOnConfiguration()
+    }
+
+    private fun applyNightMode() {
         val theme = getTheme(Prefs.appTheme)
         val uiModeManager = getSystemService(UiModeManager::class.java)
         if (uiModeManager.nightMode == theme) return
@@ -138,128 +242,22 @@ class App : Application() {
         }
     }
 
-    /**
-     * Extracts kotlin stdlib and stdlib-common from assets.
-     */
-    fun extractFiles() {
-        FileUtil.classpathDir.resolve("kotlin-stdlib-1.8.0.jar").apply {
-            exists().then { delete() }
+    private fun applyThemeBasedOnConfiguration() {
+        val themeName = when (getTheme(Prefs.appTheme)) {
+            AppCompatDelegate.MODE_NIGHT_YES -> "darcula"
+            AppCompatDelegate.MODE_NIGHT_NO -> "QuietLight"
+            else -> when (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) {
+                Configuration.UI_MODE_NIGHT_YES -> "darcula"
+                else -> "QuietLight"
+            }
         }
-        extractAsset(
-            "kotlin-stdlib-1.9.0.jar",
-            FileUtil.classpathDir.resolve("kotlin-stdlib-1.9.0.jar")
-        )
-        extractAsset(
-            "kotlin-stdlib-common-1.9.0.jar",
-            FileUtil.classpathDir.resolve("kotlin-stdlib-common-1.9.0.jar")
-        )
-    }
-
-    fun extractAsset(assetName: String, targetFile: File) {
-        targetFile.exists().ifTrue { return }
-        try {
-            assets.open(assetName).use { inputStream ->
-                targetFile.outputStream().use { outputStream ->
-                    inputStream.copyTo(outputStream)
-                }
-            }
-        } catch (e: FileNotFoundException) {
-            Log.e("App", "Failed to extract asset: $assetName", e)
-        }
-    }
-
-    fun disableModules() {
-        JavacConfigProvider.disableModules()
-    }
-
-    fun loadTextmateTheme() {
-        val fileProvider = AssetsFileResolver(assets)
-        FileProviderRegistry.getInstance().addFileProvider(fileProvider)
-
-        GrammarRegistry.getInstance().loadGrammars("textmate/languages.json")
-
-        val themeRegistry = ThemeRegistry.getInstance()
-        themeRegistry.loadTheme(loadTheme("darcula.json", "darcula"))
-        themeRegistry.loadTheme(loadTheme("QuietLight.tmTheme.json", "QuietLight"))
-
-        applyThemeBasedOnConfiguration()
-    }
-
-    private fun setupHooks() {
-
-        // Some libraries may call System.exit() to exit the app, which crashes the app.
-        // Currently, only JGit does this.
-        HookManager.registerHook(object : Hook(
-            method = "exit",
-            argTypes = arrayOf(Int::class.java),
-            type = System::class.java
-        ) {
-            override fun before(param: XC_MethodHook.MethodHookParam) {
-                System.err.println("System.exit() called!")
-                // Setting result to null bypasses the original method call.
-                param.result = null
-            }
-        })
-
-        // Fix crash in ViewPager2
-        HookManager.registerHook(object : Hook(
-            method = "onLayoutChildren",
-            argTypes = arrayOf(RecyclerView.Recycler::class.java, RecyclerView.State::class.java),
-            type = LinearLayoutManager::class.java
-        ) {
-            override fun before(param: XC_MethodHook.MethodHookParam) {
-                try {
-                    // Call the original method.
-                    HookManager.invokeOriginal(
-                        param.method,
-                        param.thisObject,
-                        param.args[0],
-                        param.args[1]
-                    )
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-                // Bypass method call as we have already called the original method.
-                param.result = null
-            }
-        })
-
-
-    }
-
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        setTheme(Prefs.appAccent.toInt())
-        applyThemeBasedOnConfiguration()
-    }
-
-    fun applyThemeBasedOnConfiguration() {
-        val themeName =
-            when (getTheme(Prefs.appTheme)) {
-                AppCompatDelegate.MODE_NIGHT_YES -> "darcula"
-                AppCompatDelegate.MODE_NIGHT_NO -> "QuietLight"
-                else -> {
-                    when (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) {
-                        Configuration.UI_MODE_NIGHT_YES -> "darcula"
-                        else -> "QuietLight"
-                    }
-                }
-            }
         ThemeRegistry.getInstance().setTheme(themeName)
     }
 
-    fun loadPlugins() {
+    private fun loadPlugins() {
         PluginsFragment.getPlugins().forEach { plugin ->
             val dir = FileUtil.pluginDir.resolve(plugin.name)
             PluginLoader.loadPlugin(dir, plugin)
         }
-    }
-
-    fun loadTheme(fileName: String, themeName: String): ThemeModel {
-        val inputStream =
-            FileProviderRegistry.getInstance().tryGetInputStream("textmate/$fileName")
-                ?: throw FileNotFoundException("Theme file not found: $fileName")
-        val source = IThemeSource.fromInputStream(inputStream, fileName, null)
-        return ThemeModel(source, themeName)
     }
 }
