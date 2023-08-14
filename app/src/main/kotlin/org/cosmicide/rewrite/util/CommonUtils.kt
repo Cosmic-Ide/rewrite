@@ -7,7 +7,10 @@
 
 package org.cosmicide.rewrite.util
 
+import android.app.Activity
+import android.content.pm.PackageManager
 import android.text.method.ScrollingMovementMethod
+import android.util.Log
 import android.view.View
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
@@ -21,6 +24,9 @@ import io.noties.markwon.movement.MovementMethodPlugin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.cosmicide.rewrite.App
+import org.cosmicide.rewrite.R
+import rikka.shizuku.Shizuku
+import rikka.shizuku.ShizukuProvider
 
 object CommonUtils {
     suspend fun showSnackbarError(view: View, text: String, error: Throwable) =
@@ -63,4 +69,28 @@ object CommonUtils {
         .usePlugin(ImagesPlugin.create())
         .usePlugin(HtmlPlugin.create())
         .build()
+
+    fun getAccent(accent: String): Int {
+        return when (accent) {
+            "default" -> R.style.Theme_CosmicIde
+            "pyro" -> R.style.Theme_CosmicIde_Pyro
+            "indigo" -> R.style.Theme_CosmicIde_Indigo
+            "flamingo" -> R.style.Theme_CosmicIde_Flamingo
+            "mint" -> R.style.Theme_CosmicIde_Mint
+            "emerald" -> R.style.Theme_CosmicIde_Emerald
+            else -> R.style.Theme_CosmicIde
+        }
+    }
+
+    fun Activity.isShizukuGranted(): Boolean {
+        if (Shizuku.pingBinder().not()) {
+            Log.d("Shizuku", "Shizuku not installed")
+            return false
+        }
+        return if (Shizuku.isPreV11()) {
+            checkSelfPermission(ShizukuProvider.PERMISSION) == PackageManager.PERMISSION_GRANTED
+        } else {
+            Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+        }
+    }
 }

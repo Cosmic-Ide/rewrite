@@ -31,11 +31,12 @@ import org.cosmicide.rewrite.fragment.PluginsFragment
 import org.cosmicide.rewrite.plugin.api.Hook
 import org.cosmicide.rewrite.plugin.api.HookManager
 import org.cosmicide.rewrite.plugin.api.PluginLoader
+import org.cosmicide.rewrite.util.CommonUtils
 import org.cosmicide.rewrite.util.FileUtil
-import org.cosmicide.rewrite.util.then
 import org.eclipse.tm4e.core.registry.IThemeSource
 import org.jetbrains.kotlin.utils.addToStdlib.ifTrue
 import org.lsposed.hiddenapibypass.HiddenApiBypass
+import rikka.sui.Sui
 import java.io.File
 import java.io.FileNotFoundException
 import java.lang.ref.WeakReference
@@ -46,10 +47,14 @@ class App : Application() {
 
     companion object {
         lateinit var instance: WeakReference<App>
+
+        @JvmStatic
+        var isShizukuAvailable = false
     }
 
     override fun onCreate() {
         super.onCreate()
+        Sui.init(packageName)
         instance = WeakReference(this)
         HookManager.context = WeakReference(this)
 
@@ -79,12 +84,42 @@ class App : Application() {
         FileUtil.init(externalStorage)
     }
 
+ 
     private fun setupStrictMode() {
         if (BuildConfig.DEBUG) {
             setupDebugStrictMode()
+
+        setupHooks()
+        loadPlugins()
+
+        if (BuildConfig.DEBUG) {
+            StrictMode.setVmPolicy(
+                StrictMode.VmPolicy.Builder().apply {
+                    detectLeakedRegistrationObjects()
+                    detectActivityLeaks()
+                    detectContentUriWithoutPermission()
+                    detectFileUriExposure()
+                    detectCleartextNetwork()
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+                        penaltyLog()
+                        return@apply
+                    }
+                    permitNonSdkApiUsage()
+                    penaltyListener(Executors.newSingleThreadExecutor()) { violation ->
+                        Log.e("StrictMode", "VM violation", violation)
+                        violation.printStackTrace()
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        detectIncorrectContextUse()
+                        detectUnsafeIntentLaunch()
+                    }
+                }.build()
+            )
+
         }
     }
 
+ 
     private fun setupDebugStrictMode() {
         StrictMode.setVmPolicy(
             StrictMode.VmPolicy.Builder().apply {
@@ -107,6 +142,29 @@ class App : Application() {
                     detectUnsafeIntentLaunch()
                 }
             }.build()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            HiddenApiBypass.addHiddenApiExemptions("L")
+        }
+
+        DynamicColors.applyToActivitiesIfAvailable(this)
+
+        extractFiles()
+        disableModules()
+
+        loadTextmateTheme()
+
+        Analytics.logEvent(
+            "startup",
+            "theme" to Prefs.appTheme,
+            "time" to ZonedDateTime.now().toString(),
+            "device" to Build.DEVICE,
+            "model" to Build.MODEL,
+            "manufacturer" to Build.MANUFACTURER,
+            "sdk" to Build.VERSION.SDK_INT.toString(),
+            "abi" to Build.SUPPORTED_ABIS.joinToString(),
+            "version" to BuildConfig.VERSION_NAME + if (BuildConfig.GIT_COMMIT.isNotEmpty()) " (${BuildConfig.GIT_COMMIT})" else "",
+
         )
     }
 
@@ -120,12 +178,30 @@ class App : Application() {
         DynamicColors.applyToActivitiesIfAvailable(this)
     }
 
+ 
     private fun extractKotlinFiles() {
         val classpathDir = FileUtil.classpathDir
         val kotlinStdlibFile = classpathDir.resolve("kotlin-stdlib-1.8.0.jar")
         kotlinStdlibFile.takeIf { it.exists() }?.delete()
         extractAsset("kotlin-stdlib-1.9.0.jar", classpathDir.resolve("kotlin-stdlib-1.9.0.jar"))
         extractAsset("kotlin-stdlib-common-1.9.0.jar", classpathDir.resolve("kotlin-stdlib-common-1.9.0.jar"))
+
+    /**
+     * Extracts kotlin stdlib and stdlib-common from assets.
+     */
+    fun extractFiles() {
+        FileUtil.classpathDir.resolve("kotlin-stdlib-1.8.0.jar").apply {
+            if (exists()) delete()
+        }
+        extractAsset(
+            "kotlin-stdlib-1.9.0.jar",
+            FileUtil.classpathDir.resolve("kotlin-stdlib-1.9.0.jar")
+        )
+        extractAsset(
+            "kotlin-stdlib-common-1.9.0.jar",
+            FileUtil.classpathDir.resolve("kotlin-stdlib-common-1.9.0.jar")
+        )
+
     }
 
     private fun extractAsset(assetName: String, targetFile: File) {
@@ -218,7 +294,7 @@ class App : Application() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        setTheme(Prefs.appAccent.toInt())
+        setTheme(CommonUtils.getAccent(Prefs.appTheme))
         applyThemeBasedOnConfiguration()
     }
 

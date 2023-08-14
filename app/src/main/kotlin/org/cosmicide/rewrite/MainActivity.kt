@@ -8,26 +8,37 @@
 package org.cosmicide.rewrite
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.AttributeSet
 import android.view.View
 import android.view.ViewGroup
+import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updateLayoutParams
 import androidx.fragment.app.commit
+import androidx.lifecycle.lifecycleScope
+import com.kieronquinn.app.darq.utils.extensions.awaitBinderReceived
+import com.kieronquinn.app.darq.utils.extensions.isShizukuInstalled
+import kotlinx.coroutines.launch
 import org.cosmicide.rewrite.common.Prefs
 import org.cosmicide.rewrite.databinding.ActivityMainBinding
 import org.cosmicide.rewrite.fragment.InstallResourcesFragment
 import org.cosmicide.rewrite.fragment.ProjectFragment
+import org.cosmicide.rewrite.util.CommonUtils
 import org.cosmicide.rewrite.util.ResourceUtil
+import rikka.shizuku.Shizuku
+import rikka.shizuku.Shizuku.OnRequestPermissionResultListener
+import rikka.shizuku.ShizukuProvider
 
 class MainActivity : AppCompatActivity() {
 
     var themeInt = 0
+    private lateinit var binding: ActivityMainBinding
+    val shizukuPermissionCode = 1
 
     override fun onCreateView(
         parent: View?,
@@ -36,19 +47,17 @@ class MainActivity : AppCompatActivity() {
         attrs: AttributeSet
     ): View? {
         val accent = Prefs.appAccent
-        if (accent != "default") {
-            themeInt = accent.toInt()
+            themeInt = CommonUtils.getAccent(accent)
             setTheme(themeInt)
-        }
+        enableEdgeToEdge()
         return super.onCreateView(parent, name, context, attrs)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         installSplashScreen()
-        WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        val binding = ActivityMainBinding.inflate(layoutInflater)
+        binding = ActivityMainBinding.inflate(layoutInflater)
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, windowInsets ->
             val imeInset =
@@ -76,5 +85,50 @@ class MainActivity : AppCompatActivity() {
                 replace(binding.fragmentContainer.id, ProjectFragment())
             }
         }
+
+        Shizuku.addRequestPermissionResultListener(listener)
+
+        if (isShizukuInstalled()) {
+            if (Shizuku.shouldShowRequestPermissionRationale()) {
+                requestPermission()
+            } else {
+                if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                    lifecycleScope.launch {
+                        awaitBinderReceived()
+                        CommonUtils.showSnackBar(binding.root, "Shizuku is ready")
+                    }
+                }
+            }
+        }
+    }
+
+    private val listener =
+        OnRequestPermissionResultListener { _, grantResult ->
+            val granted = grantResult == PackageManager.PERMISSION_GRANTED
+            // Do stuff based on the result and the request code
+            if (granted) {
+                CommonUtils.showSnackBar(binding.root, "Permission Granted")
+            } else {
+                CommonUtils.showSnackBar(binding.root, "Permission Denied")
+                if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                    lifecycleScope.launch {
+                        awaitBinderReceived()
+                        CommonUtils.showSnackBar(binding.root, "Shizuku is ready")
+                    }
+                }
+            }
+        }
+
+    fun requestPermission() {
+        if (Shizuku.isPreV11()) {
+            requestPermissions(arrayOf(ShizukuProvider.PERMISSION), shizukuPermissionCode)
+        } else {
+            Shizuku.requestPermission(shizukuPermissionCode)
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Shizuku.removeRequestPermissionResultListener(listener)
     }
 }

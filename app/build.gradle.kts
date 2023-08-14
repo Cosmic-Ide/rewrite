@@ -63,7 +63,6 @@ android {
         enable = true
     }
 
-
     configurations.configureEach {
         exclude(group = "javax.inject", module = "javax.inject")
         exclude(group = "org.jetbrains", module = "annotations-java5")
@@ -158,6 +157,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.1")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.2.0-alpha01")
     implementation("androidx.viewpager2:viewpager2:1.1.0-beta02")
+    implementation("androidx.activity:activity-ktx:1.8.0-alpha06")
 
     val editorVersion = "0.22.0"
     //noinspection GradleDependency
@@ -169,7 +169,7 @@ dependencies {
         isTransitive = false
     }
     implementation("com.itsaky.androidide:android-tree-sitter:3.3.0")
-    implementation("com.itsaky.androidide:tree-sitter-java:3.2.0")
+    implementation("com.itsaky.androidide:tree-sitter-java:3.3.0")
     implementation("io.github.itsaky:nb-javac-android:17.0.0.3")
     implementation("com.google.android.gms:play-services-oss-licenses:17.0.1")
 
@@ -191,6 +191,12 @@ dependencies {
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:4.3")
     implementation("org.slf4j:slf4j-simple:2.0.7")
     implementation(platform("com.google.firebase:firebase-bom:32.1.0"))
+
+    val shizuku_version = "13.1.4"
+    implementation("dev.rikka.shizuku:api:$shizuku_version")
+
+    // Add this line if you want to support Shizuku
+    implementation("dev.rikka.shizuku:provider:$shizuku_version")
 
     implementation(projects.buildTools)
     implementation(projects.common)

@@ -4,13 +4,18 @@
  * Cosmic IDE is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
  * You should have received a copy of the GNU General Public License along with Foobar. If not, see <https://www.gnu.org/licenses/>.
  */
-package com.pkslow.ai.utils
 
-object NetworkUtils {
-    fun setUpProxy(host: String?, port: String?) {
-        System.setProperty("http.proxyHost", host)
-        System.setProperty("http.proxyPort", port)
-        System.setProperty("https.proxyHost", host)
-        System.setProperty("https.proxyPort", port)
-    }
+package org.cosmicide.rewrite.util
+
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import org.cosmicide.rewrite.plugin.api.HookManager
+
+object PermissionUtils {
+
+    fun hasPermission(permission: String) = ContextCompat.checkSelfPermission(
+        HookManager.context.get()!!,
+        permission
+    ) == PackageManager.PERMISSION_GRANTED
+
 }
