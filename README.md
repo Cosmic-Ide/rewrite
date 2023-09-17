@@ -1,3 +1,7 @@
+# NOTE
+
+Development is now being resumed on main repository.
+
 # Cosmic IDE Rewrite
 
 A new and improved version of Cosmic IDE, a next-gen IDE for JVM development on Android.
